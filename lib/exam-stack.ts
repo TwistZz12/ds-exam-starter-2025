@@ -130,23 +130,36 @@ export class ExamStack extends cdk.Stack {
       },
     });
     
-    // Implement the EDA architecture connections
+    // Create a preprocessing Lambda function to check for email property
+    const preprocessorFn = new lambdanode.NodejsFunction(this, "PreprocessorFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_22_X,
+      entry: `${__dirname}/../lambdas/preprocessor.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        QUEUE_A_URL: queueA.queueUrl,
+        QUEUE_B_URL: queueB.queueUrl,
+        REGION: "eu-west-1",
+      },
+    });
     
-    // 1. Topic 1 subscribes to Queue A with filter policy
+    // Allow the preprocessor Lambda to send messages to both queues
+    queueA.grantSendMessages(preprocessorFn);
+    queueB.grantSendMessages(preprocessorFn);
+    
+    // Subscribe the preprocessor Lambda to Topic1 with country filter
     topic1.addSubscription(
-      new subs.SqsSubscription(queueA, {
+      new subs.LambdaSubscription(preprocessorFn, {
         filterPolicy: {
-          // Filter based on nested JSON path for the country property
           "address.country": sns.SubscriptionFilter.stringFilter({
             allowlist: ["Ireland", "China"],
           }),
         },
-        // Needed to parse and access message body attributes
-        rawMessageDelivery: true,
       })
     );
     
-    // 3. Lambda X processes messages from Queue A
+    // Lambda X processes messages from Queue A
     lambdaXFn.addEventSource(new events.SqsEventSource(queueA, {
       batchSize: 10,
     }));
