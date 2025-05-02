@@ -132,8 +132,19 @@ export class ExamStack extends cdk.Stack {
     
     // Implement the EDA architecture connections
     
-    // 1. Topic 1 subscribes to Queue A
-    topic1.addSubscription(new subs.SqsSubscription(queueA));
+    // 1. Topic 1 subscribes to Queue A with filter policy
+    topic1.addSubscription(
+      new subs.SqsSubscription(queueA, {
+        filterPolicy: {
+          // Filter based on nested JSON path for the country property
+          "address.country": sns.SubscriptionFilter.stringFilter({
+            allowlist: ["Ireland", "China"],
+          }),
+        },
+        // Needed to parse and access message body attributes
+        rawMessageDelivery: true,
+      })
+    );
     
     // 3. Lambda X processes messages from Queue A
     lambdaXFn.addEventSource(new events.SqsEventSource(queueA, {
