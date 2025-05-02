@@ -13,6 +13,7 @@ import * as events from "aws-cdk-lib/aws-lambda-event-sources";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as subs from "aws-cdk-lib/aws-sns-subscriptions";
+import { DeadLetterQueue } from "aws-cdk-lib/aws-sqs";
 
 export class ExamStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -101,6 +102,10 @@ export class ExamStack extends cdk.Stack {
 
     const queueA = new sqs.Queue(this, "queueA", {
       receiveMessageWaitTime: cdk.Duration.seconds(5),
+      deadLetterQueue: {
+        queue: queueB,
+        maxReceiveCount: 3
+      }
     });
     
     const lambdaXFn = new lambdanode.NodejsFunction(this, "LambdaXFn", {
@@ -125,6 +130,15 @@ export class ExamStack extends cdk.Stack {
       },
     });
     
+    // Implement the EDA architecture connections
+    
+    // 1. Topic 1 subscribes to Queue A
+    topic1.addSubscription(new subs.SqsSubscription(queueA));
+    
+    // 3. Lambda X processes messages from Queue A
+    lambdaXFn.addEventSource(new events.SqsEventSource(queueA, {
+      batchSize: 10,
+    }));
   }
 }
   
